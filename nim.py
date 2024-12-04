@@ -92,16 +92,36 @@ class NimAI():
         in that state, a new resulting state, and the reward received
         from taking that action.
         """
+         # Step 1: Get the current Q-value for the (old_state, action) pair
+        # This tells us what the AI currently "thinks" about the quality of this action in this state.
         old = self.get_q_value(old_state, action)
-        best_future = self.best_future_reward(new_state)
-        self.update_q_value(old_state, action, old, reward, best_future)
 
+        # Step 2: Determine the best possible future reward from the new state
+        # This looks at all possible actions in the new_state and finds the highest Q-value.
+        # If no Q-values exist for the new_state, it defaults to 0.
+        best_future = self.best_future_reward(new_state)
+
+        # Step 3: Update the Q-value for the (old_state, action) pair
+        # This uses the Q-learning formula to adjust the Q-value based on:
+        # - The immediate reward received for the action
+        # - The expected rewards from future actions
+        # - How confident we are in new information (controlled by alpha)
+        self.update_q_value(old_state, action, old, reward, best_future)
+    
     def get_q_value(self, state, action):
         """
         Return the Q-value for the state `state` and the action `action`.
         If no Q-value exists yet in `self.q`, return 0.
         """
-        raise NotImplementedError
+        # Step 1: Convert the state from a list to a tuple
+        # This is because tuples are immutable and can be used as dictionary keys.
+        # Example: [1, 2, 3] -> (1, 2, 3)
+        state_tuple = tuple(state)
+
+        # Step 2: Retrieve the Q-value for the (state, action) pair
+        # Use the `get` method to fetch the value from the dictionary.
+        # If the key doesn't exist in `self.q`, it will return 0 as a default.
+        return self.q.get((state_tuple, action), 0)
 
     def update_q_value(self, state, action, old_q, reward, future_rewards):
         """
@@ -118,7 +138,19 @@ class NimAI():
         `alpha` is the learning rate, and `new value estimate`
         is the sum of the current reward and estimated future rewards.
         """
-        raise NotImplementedError
+        # Step 1: Calculate the new value estimate
+        # This is the sum of the immediate reward and the estimated future rewards.
+        # Example: If reward is 1 and future_rewards is 0.5, new_value_estimate = 1.5.
+        new_value_estimate = reward + future_rewards
+
+        # Step 2: Apply the Q-learning formula
+        # The new Q-value is the old Q-value plus an adjustment term:
+        # The adjustment is `alpha * (new_value_estimate - old_q)`, which shifts the old value
+        # towards the new estimate, based on the learning rate (alpha).
+        self.q[(tuple(state), action)] = old_q + self.alpha * (new_value_estimate - old_q)
+
+    # Note: `tuple(state)` converts the state list to a tuple because tuples are hashable
+    # and can be used as keys in a dictionary.
 
     def best_future_reward(self, state):
         """
@@ -130,7 +162,23 @@ class NimAI():
         Q-value in `self.q`. If there are no available actions in
         `state`, return 0.
         """
-        raise NotImplementedError
+        # Step 1: Convert the state to a tuple, since states need to be hashable for dictionary keys
+        state_tuple = tuple(state)
+
+        # Step 2: Get all available actions for the current state
+        actions = Nim.available_actions(state)  # Returns a set of valid actions, e.g., {(0, 1), (1, 2)}
+        
+        # Step 3: Handle edge case where no actions are available
+        if not actions:
+            # No actions mean no future reward
+            return 0
+
+        # Step 4: Calculate the maximum Q-value for all possible actions
+        # Use `get()` to safely retrieve Q-values from the dictionary; default to 0 if not found
+        max_reward = max(self.q.get((state_tuple, action), 0) for action in actions)
+        
+        # Step 5: Return the best Q-value found
+        return max_reward
 
     def choose_action(self, state, epsilon=True):
         """
@@ -147,7 +195,31 @@ class NimAI():
         If multiple actions have the same Q-value, any of those
         options is an acceptable return value.
         """
-        raise NotImplementedError
+        
+        # Step 1: Get all possible actions in the current state
+        actions = list(Nim.available_actions(state))  # List of all valid actions
+        if not actions:
+            # If no actions are available, raise an error (this should not happen in normal gameplay)
+            raise Exception("No available actions.")
+
+        # Step 2: Decide whether to explore or exploit
+        if epsilon and random.random() < self.epsilon:
+            # Explore: Randomly choose an action
+            # The `random.random()` function generates a number between 0 and 1.
+            # If it's less than `self.epsilon`, we randomly select an action.
+            return random.choice(actions)
+        else:
+            # Exploit: Choose the best action based on Q-values
+            # Convert the state into a tuple since it's used as a dictionary key
+            state_tuple = tuple(state)
+
+            # Find the action with the highest Q-value.
+            # If an action has no Q-value (not yet learned), assume it's 0.
+            best_action = max(
+                actions,  # The list of all possible actions
+                key=lambda action: self.q.get((state_tuple, action), 0)  # Use Q-value as the "score"
+            )
+            return best_action
 
 
 def train(n):
